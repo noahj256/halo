@@ -107,24 +107,7 @@ impl halo_mgmt::Server for HaloMgmtImpl {
 }
 
 /// Get a unix socket listener from a given socket path.
-///
-/// To avoid clobbering an already-in-use unix socket, a connection is attempted to an existing
-/// unix socket first. If this fails, a new socket listener can be returned, since an existing
-/// in-use socket was determined to be absent at the given location.
 async fn prepare_unix_socket(addr: &String) -> io::Result<tokio::net::UnixListener> {
-    // Check for existing socket in use
-    match tokio::net::UnixStream::connect(&addr).await {
-        Ok(_) => {
-            eprintln!("Address already in use: {addr}");
-            return Err(io::Error::from(io::ErrorKind::AddrInUse));
-        }
-        Err(e) if e.kind() == io::ErrorKind::ConnectionRefused => {}
-        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-        Err(e) => {
-            eprintln!("Unexpected error while preparing unix socket '{addr}': {e}");
-            return Err(e);
-        }
-    };
     match std::fs::remove_file(addr) {
         Ok(_) => {}
         Err(e) if e.kind() == io::ErrorKind::NotFound => {}
@@ -206,6 +189,8 @@ pub fn main(cluster: cluster::Cluster) -> HandledResult<()> {
                 std::process::exit(1);
             }
         };
+
+        //Prepare Axum routes
 
         if cluster.context.args.verbose {
             eprintln!("listening on socket '{addr}'");
