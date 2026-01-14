@@ -3,26 +3,42 @@
 
 pub mod discover;
 pub mod manage;
-pub mod power;
-pub mod start;
-pub mod status;
-pub mod stop;
-pub mod validate;
+//pub mod power;
+//pub mod start;
+//pub mod status;
+//pub mod stop;
+//pub mod validate;
 
 use {
     discover::DiscoverArgs,
     manage::{ManageArgs, UnManageArgs},
-    power::PowerArgs,
-    status::StatusArgs,
-    validate::ValidateArgs,
+    // power::PowerArgs,
+    // status::StatusArgs,
+    // validate::ValidateArgs,
 };
 
 use clap::{Parser, Subcommand};
+use serde::{Deserialize, Serialize};
 
-use capnp_rpc::{rpc_twoparty_capnp, twoparty, RpcSystem};
-use futures::AsyncReadExt;
+// use capnp_rpc::{rpc_twoparty_capnp, twoparty, RpcSystem};
+// use futures::AsyncReadExt;
 
 use crate::{halo_capnp::halo_mgmt, Cluster};
+
+/// Axum response struct to be shared between client and server
+/// General axum response struct
+#[derive(Serialize, Deserialize)]
+pub struct AxumResponse{
+    pub error: bool,
+    pub text: String,
+}
+
+/// Axum command HTTP body structures
+#[derive(Serialize, Deserialize)]
+pub struct ManageBody {
+    pub resource: String,
+    pub manage: bool,
+}
 
 /// A `HandledError` represents an error that has already been handled. When you call a function
 /// that returns a `HandledError` or `HandledResult`, you don't need to do anything with that error,
@@ -103,12 +119,12 @@ impl Default for Cli {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
-    Status(StatusArgs),
-    Start,
-    Stop,
+    //Status(StatusArgs),
+    //Start,
+    //Stop,
     Discover(DiscoverArgs),
-    Power(PowerArgs),
-    Validate(ValidateArgs),
+    //Power(PowerArgs),
+    //Validate(ValidateArgs),
     Manage(ManageArgs),
     Unmanage(UnManageArgs),
 }
@@ -130,62 +146,39 @@ fn nodesets2hostnames(nodesets: &[String]) -> Result<Vec<String>, nodeset::NodeS
     Ok(merge_nodesets(nodesets)?.iter().collect())
 }
 
-pub fn main(cli: &Cli, command: &Commands) -> HandledResult<()> {
+// pub fn main(cli: &Cli, command: &Commands) -> HandledResult<()> {
+pub fn main(cli: &Cli, command: &Commands) -> Result<(), Box<dyn std::error::Error>>{
     if let Commands::Discover(args) = command {
-        return discover::discover(args);
+        return Ok(discover::discover(args).expect("temp"));
     };
 
-    if let Commands::Power(args) = command {
-        return power::power(cli, args);
-    }
+    // if let Commands::Power(args) = command {
+    //     return power::power(cli, args);
+    // }
 
-    if let Commands::Validate(args) = command {
-        return validate::validate(args);
-    }
+    // if let Commands::Validate(args) = command {
+    //     return validate::validate(args);
+    // }
 
     let rt = tokio::runtime::Runtime::new()
         .handle_err(|e| eprintln!("Error launching tokio runtime: {e}"))?;
 
     rt.block_on(async {
-        let context_arc = std::sync::Arc::new(crate::manager::MgrContext::new(cli.clone()));
+        //let context_arc = std::sync::Arc::new(crate::manager::MgrContext::new(cli.clone()));
         match command {
             Commands::Manage(args) => manage::manage(cli, args).await,
             Commands::Unmanage(args) => manage::unmanage(cli, args).await,
-            Commands::Status(args) => status::status(cli, args).await,
-            Commands::Start => {
-                let cluster = Cluster::new(context_arc)?;
-                start::start(cluster).await
-            }
-            Commands::Stop => {
-                let cluster = Cluster::new(context_arc)?;
-                stop::stop(cluster).await
-            }
+            // Commands::Status(args) => status::status(cli, args).await,
+            // Commands::Start => {
+            //     let cluster = Cluster::new(context_arc)?;
+            //     start::start(cluster).await
+            // }
+            // Commands::Stop => {
+            //     let cluster = Cluster::new(context_arc)?;
+            //     stop::stop(cluster).await
+            // }
             _ => unreachable!(),
         }
-    })
-}
-
-/// Get an RPC client that is used to make RPC calls from the CLI programs to the management
-/// service.
-async fn get_rpc_client(cli: &Cli) -> HandledResult<halo_mgmt::Client> {
-    let addr = match &cli.socket {
-        Some(s) => s,
-        None => &crate::default_socket(),
-    };
-    let stream = tokio::net::UnixStream::connect(addr)
-        .await
-        .handle_err(|e| eprintln!("Could not connect to socket \"{addr}\": {e}"))?;
-    let (reader, writer) = tokio_util::compat::TokioAsyncReadCompatExt::compat(stream).split();
-    let rpc_network = Box::new(twoparty::VatNetwork::new(
-        futures::io::BufReader::new(reader),
-        futures::io::BufWriter::new(writer),
-        rpc_twoparty_capnp::Side::Client,
-        Default::default(),
-    ));
-    let mut rpc_system = RpcSystem::new(rpc_network, None);
-    let client: halo_mgmt::Client = rpc_system.bootstrap(rpc_twoparty_capnp::Side::Server);
-
-    tokio::task::spawn_local(rpc_system);
-
-    Ok(client)
+    });
+    Ok(())
 }
