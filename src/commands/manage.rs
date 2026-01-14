@@ -32,11 +32,9 @@ pub async fn unmanage(cli: &Cli, args: &UnManageArgs) {
 
 // async fn send_command(cli: &Cli, resource: &str, manage: bool) -> HandledResult<()> {
 async fn send_command(cli: &Cli, resource: &str, manage: bool){
+    let socket: String = cli.socket.clone().unwrap_or_else(crate::default_socket);
     let reply = reqwest::Client::builder()
-        .unix_socket(match &cli.socket {
-            Some(s) => s,
-            None => &crate::default_socket()
-        })
+        .unix_socket(socket)
         .build().unwrap()
         .post("http://commands/manage")
         .json(&ManageBody{
